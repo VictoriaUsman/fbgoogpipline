@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+data_lake/
+warehouse/
+config/accounts.yaml
+node_modules/
+dashboard/dist/
+*.db
+.DS_Store

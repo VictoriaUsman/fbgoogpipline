@@ -1,0 +1,203 @@
+{
+  "Comment": "Daily ads ingestion: fan out over Google Ads (sync GAQL) + Meta Ads (async report) accounts, land bronze/, validate to silver/, trigger the redshift_load nested state machine.",
+  "StartAt": "PrepareMapInput",
+  "States": {
+    "PrepareMapInput": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${PrepareMapInputFunctionArn}",
+        "Payload": {
+          "time.$": "$$.Execution.Input.time"
+        }
+      },
+      "ResultSelector": {
+        "items.$": "$.Payload.items"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "PipelineFailed", "ResultPath": "$.error" }],
+      "Next": "FanOutAccounts"
+    },
+
+    "FanOutAccounts": {
+      "Type": "Map",
+      "ItemsPath": "$.items",
+      "MaxConcurrency": 8,
+      "ToleratedFailurePercentage": 10,
+      "ItemProcessor": {
+        "ProcessorConfig": { "Mode": "INLINE" },
+        "StartAt": "RequestReport",
+        "States": {
+          "RequestReport": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "${ReportRequesterFunctionArn}",
+              "Payload.$": "$"
+            },
+            "ResultSelector": { "result.$": "$.Payload" },
+            "ResultPath": "$.request",
+            "Retry": [
+              {
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException",
+                  "Lambda.SdkClientException",
+                  "Lambda.TooManyRequestsException"
+                ],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 4,
+                "BackoffRate": 2.0
+              }
+            ],
+            "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "EmitBranchFailureMetric", "ResultPath": "$.error" }],
+            "Next": "IsAsyncPlatform"
+          },
+
+          "IsAsyncPlatform": {
+            "Type": "Choice",
+            "Choices": [
+              { "Variable": "$.request.result.status", "StringEquals": "IN_PROGRESS", "Next": "WaitBeforePoll" }
+            ],
+            "Default": "BranchSucceeded"
+          },
+
+          "WaitBeforePoll": { "Type": "Wait", "Seconds": 30, "Next": "PollReportStatus" },
+
+          "PollReportStatus": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "${ReportPollerFunctionArn}",
+              "Payload.$": "$.request.result"
+            },
+            "ResultSelector": { "result.$": "$.Payload" },
+            "ResultPath": "$.request",
+            "Retry": [
+              {
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException",
+                  "Lambda.SdkClientException",
+                  "Lambda.TooManyRequestsException"
+                ],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 4,
+                "BackoffRate": 2.0
+              }
+            ],
+            "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "EmitBranchFailureMetric", "ResultPath": "$.error" }],
+            "Next": "EvaluatePollResult"
+          },
+
+          "EvaluatePollResult": {
+            "Type": "Choice",
+            "Choices": [
+              { "Variable": "$.request.result.status", "StringEquals": "COMPLETED", "Next": "DownloadReport" },
+              { "Variable": "$.request.result.status", "StringEquals": "FAILED", "Next": "EmitBranchFailureMetric" },
+              { "Variable": "$.request.result.poll_count", "NumericGreaterThanEquals": 30, "Next": "ReportTimedOut" }
+            ],
+            "Default": "WaitBeforePoll"
+          },
+
+          "ReportTimedOut": { "Type": "Fail", "Error": "ReportTimedOut", "Cause": "Meta Ads report polling exceeded 30 attempts" },
+
+          "DownloadReport": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "${ReportDownloaderFunctionArn}",
+              "Payload.$": "$.request.result"
+            },
+            "ResultSelector": { "result.$": "$.Payload" },
+            "ResultPath": "$.request",
+            "Retry": [
+              {
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException",
+                  "Lambda.SdkClientException",
+                  "Lambda.TooManyRequestsException"
+                ],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 4,
+                "BackoffRate": 2.0
+              }
+            ],
+            "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "EmitBranchFailureMetric", "ResultPath": "$.error" }],
+            "Next": "BranchSucceeded"
+          },
+
+          "BranchSucceeded": { "Type": "Succeed" },
+
+          "EmitBranchFailureMetric": {
+            "Comment": "Tolerated Map failures (ToleratedFailurePercentage) never surface on the Execution Status Change EventBridge rule, so each failing branch emits its own CloudWatch metric before failing.",
+            "Type": "Task",
+            "Resource": "arn:aws:states:::aws-sdk:cloudwatch:putMetricData",
+            "Parameters": {
+              "Namespace": "GoogleMetaPipeline/Ingestion",
+              "MetricData": [
+                {
+                  "MetricName": "BranchFailureCount",
+                  "Value": 1,
+                  "Dimensions": [{ "Name": "Platform", "Value.$": "$.platform" }]
+                }
+              ]
+            },
+            "Next": "BranchFailed"
+          },
+
+          "BranchFailed": { "Type": "Fail", "Error": "AccountIngestionFailed" }
+        }
+      },
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "PipelineFailed", "ResultPath": "$.error" }],
+      "Next": "GlueTransform"
+    },
+
+    "GlueTransform": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "${BronzeToSilverGlueJobName}",
+        "Arguments": {
+          "--bucket": "${DataLakeBucketName}",
+          "--start-date.$": "$$.Execution.Input.start_date",
+          "--until-date.$": "$$.Execution.Input.end_date"
+        }
+      },
+      "Retry": [{ "ErrorEquals": ["Glue.ConcurrentRunsExceededException"], "IntervalSeconds": 30, "MaxAttempts": 5, "BackoffRate": 2.0 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "PipelineFailed", "ResultPath": "$.error" }],
+      "Next": "TriggerRedshiftLoad"
+    },
+
+    "TriggerRedshiftLoad": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::states:startExecution.sync:2",
+      "Parameters": {
+        "StateMachineArn": "${RedshiftLoadStateMachineArn}",
+        "Input": {
+          "start_date.$": "$$.Execution.Input.start_date",
+          "end_date.$": "$$.Execution.Input.end_date"
+        }
+      },
+      "Retry": [{ "ErrorEquals": ["StepFunctions.ExecutionLimitExceeded"], "IntervalSeconds": 15, "MaxAttempts": 3, "BackoffRate": 2.0 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "PipelineFailed", "ResultPath": "$.error" }],
+      "Next": "PipelineSucceeded"
+    },
+
+    "PipelineSucceeded": { "Type": "Succeed" },
+    "PipelineFailed": { "Type": "Fail", "Error": "PipelineFailed" }
+  }
+}

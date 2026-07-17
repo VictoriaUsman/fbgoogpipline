@@ -1,0 +1,33 @@
+# Per-account configuration, expanded by lambda_handlers/prepare_map_input.py into flat
+# Step Functions Map items (one per account, fanned out further by campaign at load time).
+#
+# Real credentials never live here -- `secret_name` is only a pointer into Secrets
+# Manager (see common/secrets.py). Copy this file to accounts.yaml (gitignored) and edit
+# for a real deployment; the committed accounts.yaml in this demo project is fine to
+# run as-is since DEMO_MODE=1 stubs out all credential resolution.
+
+- platform: google_ads
+  account_id: "111-222-3333"
+  account_name: "Acme Retail - Google Ads"
+  currency: USD
+  secret_name: googleads/acme-retail
+  login_customer_id: "999-888-7777" # MCC id
+
+- platform: google_ads
+  account_id: "444-555-6666"
+  account_name: "Acme B2B - Google Ads"
+  currency: USD
+  secret_name: googleads/acme-b2b
+  login_customer_id: "999-888-7777"
+
+- platform: meta_ads
+  account_id: "act_10150123456789"
+  account_name: "Acme Retail - Meta Ads"
+  currency: USD
+  secret_name: metaads/acme-retail
+
+- platform: meta_ads
+  account_id: "act_10150987654321"
+  account_name: "Acme B2B - Meta Ads"
+  currency: USD
+  secret_name: metaads/acme-b2b

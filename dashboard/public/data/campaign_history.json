@@ -1,0 +1,128 @@
+[
+  {
+    "campaign_id": "23860111000001",
+    "platform": "meta_ads",
+    "campaign_name": "Prospecting - Lookalike 1%",
+    "channel_type": null,
+    "valid_from": "2026-07-17T03:03:16.567887+00:00",
+    "valid_to": null,
+    "is_current": 1
+  },
+  {
+    "campaign_id": "23860111000002",
+    "platform": "meta_ads",
+    "campaign_name": "Retargeting - Cart Abandoners",
+    "channel_type": null,
+    "valid_from": "2026-07-17T03:03:16.567887+00:00",
+    "valid_to": null,
+    "is_current": 1
+  },
+  {
+    "campaign_id": "23860111000003",
+    "platform": "meta_ads",
+    "campaign_name": "Catalog Sales - Dynamic Ads",
+    "channel_type": null,
+    "valid_from": "2026-07-17T03:03:16.567887+00:00",
+    "valid_to": null,
+    "is_current": 1
+  },
+  {
+    "campaign_id": "23860222000001",
+    "platform": "meta_ads",
+    "campaign_name": "Lead Gen - Decision Makers",
+    "channel_type": null,
+    "valid_from": "2026-07-17T03:03:16.567887+00:00",
+    "valid_to": "2026-07-17T03:03:16.575337+00:00",
+    "is_current": 0
+  },
+  {
+    "campaign_id": "23860222000001",
+    "platform": "meta_ads",
+    "campaign_name": "Lead Gen - Enterprise Decision Makers",
+    "channel_type": null,
+    "valid_from": "2026-07-17T03:03:16.575337+00:00",
+    "valid_to": null,
+    "is_current": 1
+  },
+  {
+    "campaign_id": "23860222000002",
+    "platform": "meta_ads",
+    "campaign_name": "Retargeting - Website Visitors",
+    "channel_type": null,
+    "valid_from": "2026-07-17T03:03:16.567887+00:00",
+    "valid_to": null,
+    "is_current": 1
+  },
+  {
+    "campaign_id": "23860222000003",
+    "platform": "meta_ads",
+    "campaign_name": "Awareness - Video Views",
+    "channel_type": null,
+    "valid_from": "2026-07-17T03:03:16.567887+00:00",
+    "valid_to": null,
+    "is_current": 1
+  },
+  {
+    "campaign_id": "7001001",
+    "platform": "google_ads",
+    "campaign_name": "Search - Brand",
+    "channel_type": "SEARCH",
+    "valid_from": "2026-07-17T03:03:16.567887+00:00",
+    "valid_to": "2026-07-17T03:03:16.575337+00:00",
+    "is_current": 0
+  },
+  {
+    "campaign_id": "7001001",
+    "platform": "google_ads",
+    "campaign_name": "Search - Brand (US)",
+    "channel_type": "SEARCH",
+    "valid_from": "2026-07-17T03:03:16.575337+00:00",
+    "valid_to": null,
+    "is_current": 1
+  },
+  {
+    "campaign_id": "7001002",
+    "platform": "google_ads",
+    "campaign_name": "Shopping - Bestsellers",
+    "channel_type": "SHOPPING",
+    "valid_from": "2026-07-17T03:03:16.567887+00:00",
+    "valid_to": null,
+    "is_current": 1
+  },
+  {
+    "campaign_id": "7001003",
+    "platform": "google_ads",
+    "campaign_name": "Performance Max - Retail",
+    "channel_type": "PERFORMANCE_MAX",
+    "valid_from": "2026-07-17T03:03:16.567887+00:00",
+    "valid_to": null,
+    "is_current": 1
+  },
+  {
+    "campaign_id": "7002001",
+    "platform": "google_ads",
+    "campaign_name": "Search - Competitor Terms",
+    "channel_type": "SEARCH",
+    "valid_from": "2026-07-17T03:03:16.567887+00:00",
+    "valid_to": null,
+    "is_current": 1
+  },
+  {
+    "campaign_id": "7002002",
+    "platform": "google_ads",
+    "campaign_name": "Search - Branded",
+    "channel_type": "SEARCH",
+    "valid_from": "2026-07-17T03:03:16.567887+00:00",
+    "valid_to": null,
+    "is_current": 1
+  },
+  {
+    "campaign_id": "7002003",
+    "platform": "google_ads",
+    "campaign_name": "Display - Retargeting",
+    "channel_type": "DISPLAY",
+    "valid_from": "2026-07-17T03:03:16.567887+00:00",
+    "valid_to": null,
+    "is_current": 1
+  }
+]

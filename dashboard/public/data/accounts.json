@@ -1,0 +1,26 @@
+[
+  {
+    "account_id": "111-222-3333",
+    "platform": "google_ads",
+    "account_name": "Acme Retail - Google Ads",
+    "currency": "USD"
+  },
+  {
+    "account_id": "444-555-6666",
+    "platform": "google_ads",
+    "account_name": "Acme B2B - Google Ads",
+    "currency": "USD"
+  },
+  {
+    "account_id": "act_10150123456789",
+    "platform": "meta_ads",
+    "account_name": "Acme Retail - Meta Ads",
+    "currency": "USD"
+  },
+  {
+    "account_id": "act_10150987654321",
+    "platform": "meta_ads",
+    "account_name": "Acme B2B - Meta Ads",
+    "currency": "USD"
+  }
+]

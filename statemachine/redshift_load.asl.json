@@ -1,0 +1,191 @@
+{
+  "Comment": "Nested state machine invoked via states:startExecution.sync:2 from ads_ingestion.asl.json. Loads the full silver/ zone into staging, then SCD2-upserts dim_account/dim_campaign/fct_campaign_performance_history, merges into fct_campaign_performance, and always runs a reconciliation check. The Redshift Data API has no native .sync integration, so every SQL step hand-rolls a Wait/DescribeStatement/Choice poll loop (unlike GlueTransform and TriggerRedshiftLoad in ads_ingestion.asl.json, which use native .sync).",
+  "StartAt": "CopyIntoStaging",
+  "States": {
+    "CopyIntoStaging": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:redshiftdata:batchExecuteStatement",
+      "Parameters": {
+        "WorkgroupName": "${RedshiftWorkgroupName}",
+        "Database": "${RedshiftDatabaseName}",
+        "Sqls": ["${CopyIntoStagingSql}"]
+      },
+      "ResultPath": "$.statement",
+      "Retry": [{ "ErrorEquals": ["RedshiftData.ThrottlingException"], "IntervalSeconds": 5, "MaxAttempts": 4, "BackoffRate": 2.0 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "LoadFailed", "ResultPath": "$.error" }],
+      "Next": "WaitCopyIntoStaging"
+    },
+    "WaitCopyIntoStaging": { "Type": "Wait", "Seconds": 15, "Next": "DescribeCopyIntoStaging" },
+    "DescribeCopyIntoStaging": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:redshiftdata:describeStatement",
+      "Parameters": { "Id.$": "$.statement.Id" },
+      "ResultPath": "$.statementStatus",
+      "Retry": [{ "ErrorEquals": ["RedshiftData.ThrottlingException"], "IntervalSeconds": 5, "MaxAttempts": 4, "BackoffRate": 2.0 }],
+      "Next": "IsCopyIntoStagingDone"
+    },
+    "IsCopyIntoStagingDone": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.statementStatus.Status", "StringEquals": "FINISHED", "Next": "ScdDimAccount" },
+        { "Variable": "$.statementStatus.Status", "StringEquals": "FAILED", "Next": "LoadFailed" },
+        { "Variable": "$.statementStatus.Status", "StringEquals": "ABORTED", "Next": "LoadFailed" }
+      ],
+      "Default": "WaitCopyIntoStaging"
+    },
+
+    "ScdDimAccount": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:redshiftdata:batchExecuteStatement",
+      "Parameters": {
+        "WorkgroupName": "${RedshiftWorkgroupName}",
+        "Database": "${RedshiftDatabaseName}",
+        "Sqls": ["${ScdDimAccountCloseSql}", "${ScdDimAccountInsertSql}"]
+      },
+      "ResultPath": "$.statement",
+      "Retry": [{ "ErrorEquals": ["RedshiftData.ThrottlingException"], "IntervalSeconds": 5, "MaxAttempts": 4, "BackoffRate": 2.0 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "LoadFailed", "ResultPath": "$.error" }],
+      "Next": "WaitScdDimAccount"
+    },
+    "WaitScdDimAccount": { "Type": "Wait", "Seconds": 15, "Next": "DescribeScdDimAccount" },
+    "DescribeScdDimAccount": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:redshiftdata:describeStatement",
+      "Parameters": { "Id.$": "$.statement.Id" },
+      "ResultPath": "$.statementStatus",
+      "Next": "IsScdDimAccountDone"
+    },
+    "IsScdDimAccountDone": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.statementStatus.Status", "StringEquals": "FINISHED", "Next": "ScdDimCampaign" },
+        { "Variable": "$.statementStatus.Status", "StringEquals": "FAILED", "Next": "LoadFailed" },
+        { "Variable": "$.statementStatus.Status", "StringEquals": "ABORTED", "Next": "LoadFailed" }
+      ],
+      "Default": "WaitScdDimAccount"
+    },
+
+    "ScdDimCampaign": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:redshiftdata:batchExecuteStatement",
+      "Parameters": {
+        "WorkgroupName": "${RedshiftWorkgroupName}",
+        "Database": "${RedshiftDatabaseName}",
+        "Sqls": ["${ScdDimCampaignCloseSql}", "${ScdDimCampaignInsertSql}"]
+      },
+      "ResultPath": "$.statement",
+      "Retry": [{ "ErrorEquals": ["RedshiftData.ThrottlingException"], "IntervalSeconds": 5, "MaxAttempts": 4, "BackoffRate": 2.0 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "LoadFailed", "ResultPath": "$.error" }],
+      "Next": "WaitScdDimCampaign"
+    },
+    "WaitScdDimCampaign": { "Type": "Wait", "Seconds": 15, "Next": "DescribeScdDimCampaign" },
+    "DescribeScdDimCampaign": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:redshiftdata:describeStatement",
+      "Parameters": { "Id.$": "$.statement.Id" },
+      "ResultPath": "$.statementStatus",
+      "Next": "IsScdDimCampaignDone"
+    },
+    "IsScdDimCampaignDone": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.statementStatus.Status", "StringEquals": "FINISHED", "Next": "ScdFctCampaignPerformanceHistory" },
+        { "Variable": "$.statementStatus.Status", "StringEquals": "FAILED", "Next": "LoadFailed" },
+        { "Variable": "$.statementStatus.Status", "StringEquals": "ABORTED", "Next": "LoadFailed" }
+      ],
+      "Default": "WaitScdDimCampaign"
+    },
+
+    "ScdFctCampaignPerformanceHistory": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:redshiftdata:batchExecuteStatement",
+      "Parameters": {
+        "WorkgroupName": "${RedshiftWorkgroupName}",
+        "Database": "${RedshiftDatabaseName}",
+        "Sqls": ["${ScdFctCampaignPerformanceCloseSql}", "${ScdFctCampaignPerformanceInsertSql}"]
+      },
+      "ResultPath": "$.statement",
+      "Retry": [{ "ErrorEquals": ["RedshiftData.ThrottlingException"], "IntervalSeconds": 5, "MaxAttempts": 4, "BackoffRate": 2.0 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "LoadFailed", "ResultPath": "$.error" }],
+      "Next": "WaitScdFctCampaignPerformanceHistory"
+    },
+    "WaitScdFctCampaignPerformanceHistory": { "Type": "Wait", "Seconds": 15, "Next": "DescribeScdFctCampaignPerformanceHistory" },
+    "DescribeScdFctCampaignPerformanceHistory": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:redshiftdata:describeStatement",
+      "Parameters": { "Id.$": "$.statement.Id" },
+      "ResultPath": "$.statementStatus",
+      "Next": "IsScdFctCampaignPerformanceHistoryDone"
+    },
+    "IsScdFctCampaignPerformanceHistoryDone": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.statementStatus.Status", "StringEquals": "FINISHED", "Next": "MergeIntoFact" },
+        { "Variable": "$.statementStatus.Status", "StringEquals": "FAILED", "Next": "LoadFailed" },
+        { "Variable": "$.statementStatus.Status", "StringEquals": "ABORTED", "Next": "LoadFailed" }
+      ],
+      "Default": "WaitScdFctCampaignPerformanceHistory"
+    },
+
+    "MergeIntoFact": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:redshiftdata:batchExecuteStatement",
+      "Parameters": {
+        "WorkgroupName": "${RedshiftWorkgroupName}",
+        "Database": "${RedshiftDatabaseName}",
+        "Sqls": ["${MergeFctCampaignPerformanceSql}"]
+      },
+      "ResultPath": "$.statement",
+      "Retry": [{ "ErrorEquals": ["RedshiftData.ThrottlingException"], "IntervalSeconds": 5, "MaxAttempts": 4, "BackoffRate": 2.0 }],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "LoadFailed", "ResultPath": "$.error" }],
+      "Next": "WaitMergeIntoFact"
+    },
+    "WaitMergeIntoFact": { "Type": "Wait", "Seconds": 15, "Next": "DescribeMergeIntoFact" },
+    "DescribeMergeIntoFact": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:redshiftdata:describeStatement",
+      "Parameters": { "Id.$": "$.statement.Id" },
+      "ResultPath": "$.statementStatus",
+      "Next": "IsMergeIntoFactDone"
+    },
+    "IsMergeIntoFactDone": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.statementStatus.Status", "StringEquals": "FINISHED", "Next": "ReconciliationCheck" },
+        { "Variable": "$.statementStatus.Status", "StringEquals": "FAILED", "Next": "LoadFailed" },
+        { "Variable": "$.statementStatus.Status", "StringEquals": "ABORTED", "Next": "LoadFailed" }
+      ],
+      "Default": "WaitMergeIntoFact"
+    },
+
+    "ReconciliationCheck": {
+      "Comment": "Always runs, success or mismatch alike -- publishes a result rather than only alerting on failure.",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${ReconciliationCheckFunctionArn}",
+        "Payload": {
+          "start_date.$": "$$.Execution.Input.start_date",
+          "end_date.$": "$$.Execution.Input.end_date",
+          "workgroup_name": "${RedshiftWorkgroupName}",
+          "database": "${RedshiftDatabaseName}"
+        }
+      },
+      "ResultSelector": { "result.$": "$.Payload" },
+      "ResultPath": "$.reconciliation",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "LoadFailed", "ResultPath": "$.error" }],
+      "Next": "LoadSucceeded"
+    },
+
+    "LoadSucceeded": { "Type": "Succeed" },
+    "LoadFailed": { "Type": "Fail", "Error": "LoadFailed" }
+  }
+}

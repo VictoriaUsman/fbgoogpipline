@@ -1,0 +1,89 @@
+{
+  "counts_by_platform": {
+    "google_ads": 2,
+    "meta_ads": 3
+  },
+  "reasons": {
+    "field cost is negative: -698.42": 1,
+    "missing required field: campaign_name": 2,
+    "field cost is negative: -235.52": 1,
+    "field cost is negative: -221.99": 1
+  },
+  "samples": [
+    {
+      "date": "2026-07-13",
+      "platform": "google_ads",
+      "account_id": "111-222-3333",
+      "account_name": "Acme Retail - Google Ads",
+      "currency": "USD",
+      "campaign_id": "7001001",
+      "campaign_name": "Search - Brand (US)",
+      "impressions": 8881,
+      "clicks": 896,
+      "cost": -698.42,
+      "conversions": 89.06,
+      "conversions_value": 5592.85,
+      "channel_type": "SEARCH",
+      "_validation_error": "field cost is negative: -698.42"
+    },
+    {
+      "date": "2026-07-14",
+      "platform": "google_ads",
+      "account_id": "111-222-3333",
+      "account_name": "Acme Retail - Google Ads",
+      "currency": "USD",
+      "campaign_id": "7001003",
+      "impressions": 37871,
+      "clicks": 729,
+      "cost": 437.04,
+      "conversions": 40.2,
+      "conversions_value": 2632.69,
+      "channel_type": "PERFORMANCE_MAX",
+      "_validation_error": "missing required field: campaign_name"
+    },
+    {
+      "date": "2026-07-08",
+      "platform": "meta_ads",
+      "account_id": "act_10150123456789",
+      "account_name": "Acme Retail - Meta Ads",
+      "currency": "USD",
+      "campaign_id": "23860111000001",
+      "campaign_name": "Prospecting - Lookalike 1%",
+      "impressions": 38406,
+      "clicks": 498,
+      "cost": -235.52,
+      "conversions": 13.89,
+      "conversions_value": 781.03,
+      "_validation_error": "field cost is negative: -235.52"
+    },
+    {
+      "date": "2026-07-13",
+      "platform": "meta_ads",
+      "account_id": "act_10150123456789",
+      "account_name": "Acme Retail - Meta Ads",
+      "currency": "USD",
+      "campaign_id": "23860111000003",
+      "impressions": 19314,
+      "clicks": 355,
+      "cost": 190.55,
+      "conversions": 25.69,
+      "conversions_value": 1378.54,
+      "_validation_error": "missing required field: campaign_name"
+    },
+    {
+      "date": "2026-07-14",
+      "platform": "meta_ads",
+      "account_id": "act_10150987654321",
+      "account_name": "Acme B2B - Meta Ads",
+      "currency": "USD",
+      "campaign_id": "23860222000001",
+      "campaign_name": "Lead Gen - Enterprise Decision Makers",
+      "impressions": 12889,
+      "clicks": 118,
+      "cost": -221.99,
+      "conversions": 3.19,
+      "conversions_value": 2647.1,
+      "_validation_error": "field cost is negative: -221.99"
+    }
+  ]
+}
