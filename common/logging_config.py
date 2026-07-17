@@ -12,7 +12,11 @@ from __future__ import annotations
 import json
 import logging
 import sys
+from pathlib import Path
 from typing import Any
+
+_LOGGERS: list[logging.Logger] = []
+_FILE_HANDLER: logging.Handler | None = None
 
 
 class _JsonFormatter(logging.Formatter):
@@ -39,9 +43,30 @@ def get_logger(name: str) -> logging.Logger:
         logger.addHandler(handler)
         logger.setLevel(logging.INFO)
         logger.propagate = False
+        _LOGGERS.append(logger)
+        if _FILE_HANDLER is not None:
+            logger.addHandler(_FILE_HANDLER)
     return logger
 
 
 def log_fields(**kwargs: Any) -> dict[str, dict[str, Any]]:
     """Build the `extra=` payload for a log call: `logger.info("msg", extra=log_fields(account_id=x))`."""
     return {"fields": kwargs}
+
+
+def enable_file_logging(log_path: Path | str) -> Path:
+    """Attach a JSON file handler at `log_path` to every logger created so far, and to
+    every logger `get_logger` creates from now on -- called once from
+    `local_runner.run_pipeline.main()` so a full run's structured logs are durable on
+    disk (CloudWatch Logs' role in a real deployment), not just printed to stdout and
+    lost when the process exits.
+    """
+    global _FILE_HANDLER
+    path = Path(log_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handler = logging.FileHandler(path)
+    handler.setFormatter(_JsonFormatter())
+    _FILE_HANDLER = handler
+    for logger in _LOGGERS:
+        logger.addHandler(handler)
+    return path

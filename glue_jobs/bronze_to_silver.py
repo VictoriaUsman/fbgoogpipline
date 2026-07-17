@@ -25,6 +25,7 @@ from pathlib import Path
 
 from common.logging_config import get_logger, log_fields
 from common.s3_paths import swap_zone
+from common.versioning import write_versioned
 from validation.rules import detect_new_fields, validate_record
 
 logger = get_logger(__name__)
@@ -115,13 +116,11 @@ def _process_key(lake_root: Path, key: str, platform: str) -> tuple[int, int, se
 
     if valid_lines:
         silver_path = lake_root / swap_zone(key, "silver")
-        silver_path.parent.mkdir(parents=True, exist_ok=True)
-        silver_path.write_text("\n".join(valid_lines) + "\n")
+        write_versioned(silver_path, "\n".join(valid_lines) + "\n")
 
     if rejected_lines:
         rejected_path = lake_root / swap_zone(key, "rejected")
-        rejected_path.parent.mkdir(parents=True, exist_ok=True)
-        rejected_path.write_text("\n".join(rejected_lines) + "\n")
+        write_versioned(rejected_path, "\n".join(rejected_lines) + "\n")
 
     return len(valid_lines), len(rejected_lines), all_new_fields
 

@@ -19,11 +19,12 @@ pip install -r requirements.txt -r requirements-dev.txt
 python -m local_runner.run_pipeline --reset --days 14
 ```
 
-This regenerates seed data, runs Glue-style validation, and loads the SQLite stand-in
-warehouse across two simulated daily load passes, then writes the dashboard's JSON
-data files. Expect output like:
+This regenerates seed data, runs Glue-style validation, snapshots the warehouse before
+each of two simulated daily load passes, and writes the dashboard's JSON data files.
+Expect output like:
 
 ```
+Logging to stdout and logs/pipeline_run_20260717T051523Z.jsonl
 seed: wrote 168 bronze rows across 4 accounts
 glue: 163 valid / 5 rejected
 reconciliation 2026-07-03..2026-07-09: OK (83 staging rows == 83 fact rows, $27,287.76 == $27,287.76)
@@ -152,6 +153,45 @@ a mid-window campaign rename. `dim_campaign`'s version chain for the renamed
 campaigns only has two rows because two real load passes ran — not because a fixture
 says so. `dashboard/public/data/campaign_history.json` shows the result.
 
+## Alerting, versioning, and logging
+
+Four small additions on top of the core ingest → validate → warehouse path, each a
+demo-scale stand-in for something a real AWS deployment gets for free:
+
+- **Teams alerts** (`common/notifications.py`) — fire on a reconciliation `MISMATCH`
+  or when a platform's rejected ratio for a run exceeds
+  `REJECTED_RATIO_ALERT_THRESHOLD` (10%, see `local_runner/run_pipeline.py`). Follows
+  the same `DEMO_MODE` pattern as `common/secrets.py`: with `DEMO_MODE=1` (the
+  default) or no `TEAMS_WEBHOOK_URL` set, the alert is logged instead of posted. Set
+  `DEMO_MODE=0` and `TEAMS_WEBHOOK_URL=<a Teams incoming webhook URL>` to see a real
+  Teams message.
+- **S3 versioning, stood in** (`common/versioning.py`) — every bronze/silver/rejected
+  write goes through `write_versioned()`, which archives the object it's about to
+  overwrite into a sibling `.versions/` folder first. A real deployment would just
+  enable bucket versioning (`aws s3api put-bucket-versioning ... Status=Enabled`) and
+  get this for free; there's no bucket here, so a file copy does the same job by hand.
+- **Redshift snapshots, stood in** (`snapshot_warehouse()` in
+  `local_runner/run_pipeline.py`) — before each of the two simulated daily load
+  passes, the SQLite stand-in warehouse is backed up (via SQLite's own backup API, so
+  a live connection can never yield a torn copy) into `warehouse/snapshots/`, keeping
+  the last `SNAPSHOTS_TO_KEEP` (5). The real equivalent is
+  `aws redshift create-cluster-snapshot`.
+- **Logging, made durable** (`enable_file_logging()` in `common/logging_config.py`) —
+  every run now also writes its structured JSON log lines to
+  `logs/pipeline_run_<timestamp>.jsonl`, in addition to stdout — the durable-storage
+  role CloudWatch Logs plays for real Lambdas and Glue jobs.
+- **Data validation, surfaced** — `glue_jobs/bronze_to_silver.py`'s
+  `validate_record()` hard gate and `detect_new_fields()` drift signal already ran on
+  every `run_pipeline` invocation; what's new is that `run_glue_transform()` parses
+  the rejected-ratio and drift-field metrics back out of that job's own structured
+  logs and writes them into `dashboard/public/data/pipeline_run_summary.json`'s
+  `data_quality` key, so every run's validation outcome is visible without grepping
+  logs.
+
+None of this is wired to a CloudWatch Alarm or SNS topic — see
+[Scope](#scope-vs-the-amazon-ads-reference-pipeline) below. The Teams webhook is the
+one piece of real, end-to-end alerting this project implements.
+
 ## Scope vs. the Amazon Ads reference pipeline
 
 This project intentionally cuts everything the reference pipeline has beyond the core
@@ -177,13 +217,15 @@ ingest → validate → warehouse path, to keep it demo-sized:
 |---|---|
 | `connectors/` | `base.py` (shared retry/backoff), `google_ads_connector.py`, `meta_ads_connector.py` |
 | `lambda_handlers/` | `prepare_map_input.py`, `report_requester.py`, `report_poller.py`, `report_downloader.py` |
-| `common/` | `secrets.py`, `scheduling.py`, `s3_paths.py`, `bronze_writer.py`, `logging_config.py` |
+| `common/` | `secrets.py`, `scheduling.py`, `s3_paths.py`, `bronze_writer.py`, `logging_config.py`, `notifications.py` (Teams alerting), `versioning.py` (overwrite-preserving writes) |
 | `validation/rules.py` | `validate_record()` (hard gate) and `detect_new_fields()` (drift signal) |
 | `glue_jobs/bronze_to_silver.py` | Bronze → silver/rejected split, run as a standalone CLI script |
 | `statemachine/` | `ads_ingestion.asl.json`, `redshift_load.asl.json` |
 | `redshift/` | SCD2 dimension + fact SQL, written for real Redshift syntax |
 | `seed_data/` | `generate_seed_data.py`, `campaign_catalog.py` — realistic, seeded-random demo data with a ~3% invalid rate and a ~5% drift rate |
-| `local_runner/run_pipeline.py` | Local orchestrator: seed → Glue validation subprocess → SQLite SCD2 load → dashboard JSON export |
+| `local_runner/run_pipeline.py` | Local orchestrator: seed → Glue validation subprocess → warehouse snapshot → SQLite SCD2 load → dashboard JSON export |
+| `logs/` | Per-run structured JSON logs (gitignored, see [Alerting, versioning, and logging](#alerting-versioning-and-logging)) |
+| `warehouse/snapshots/` | Point-in-time SQLite warehouse backups, one per load pass (gitignored) |
 | `dashboard/` | Static React (Vite) dashboard reading `dashboard/public/data/*.json` |
 | `tests/` | pytest suite — validation rules, scheduling, connectors, bronze writer, S3 paths, Glue job, lambda integration |
 | `.github/workflows/ci.yml` | ruff lint, ASL JSON validation, pytest |

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-17T04:43:43.234196+00:00",
+  "generated_at": "2026-07-17T05:22:54.449284+00:00",
   "reconciliation_passes": [
     {
       "start_date": "2026-07-03",
@@ -19,5 +19,15 @@
       "staging_cost": 25876.83,
       "fact_cost": 25876.83
     }
-  ]
+  ],
+  "data_quality": {
+    "rejected_ratios": {
+      "google_ads": 0.023809523809523808,
+      "meta_ads": 0.03571428571428571
+    },
+    "drift_fields": {
+      "google_ads.ad_group_count": 5,
+      "meta_ads.audience_segment": 5
+    }
+  }
 }

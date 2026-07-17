@@ -20,6 +20,7 @@ from datetime import date
 
 from common.logging_config import get_logger
 from common.s3_paths import local_path, object_key
+from common.versioning import write_versioned
 
 logger = get_logger(__name__)
 
@@ -41,10 +42,8 @@ def write_bronze_ndjson(rows: Iterable[dict], *, platform: str, account_id: str)
             "bronze", platform=platform, account_id=account_id, report_date=report_date, part=parts[report_date]
         )
         path = local_path(key)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("w") as fh:
-            for row in buffer:
-                fh.write(json.dumps(row) + "\n")
+        content = "".join(json.dumps(row) + "\n" for row in buffer)
+        write_versioned(path, content)
         total_written += len(buffer)
         parts[report_date] += 1
         buffer.clear()

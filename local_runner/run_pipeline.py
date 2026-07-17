@@ -34,16 +34,22 @@ import sys
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
-from common.logging_config import get_logger
+from common.logging_config import enable_file_logging, get_logger
+from common.notifications import send_teams_alert
 from seed_data.generate_seed_data import generate as generate_seed_data
 
 logger = get_logger(__name__)
+
+REJECTED_RATIO_ALERT_THRESHOLD = 0.10
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LAKE_ROOT = REPO_ROOT / "data_lake"
 WAREHOUSE_DB_PATH = REPO_ROOT / "warehouse" / "pipeline.db"
 SCHEMA_PATH = Path(__file__).parent / "sqlite_schema.sql"
 DASHBOARD_DATA_DIR = REPO_ROOT / "dashboard" / "public" / "data"
+SNAPSHOT_DIR = REPO_ROOT / "warehouse" / "snapshots"
+SNAPSHOTS_TO_KEEP = 5
+LOG_DIR = REPO_ROOT / "logs"
 
 PARTITION_PATTERN = re.compile(
     r"^(?P<zone>bronze|silver|rejected)/platform=(?P<platform>[^/]+)/account_id=(?P<account_id>[^/]+)/"
@@ -57,10 +63,13 @@ def reset_local_state() -> None:
     logger.info("reset local data lake and warehouse")
 
 
-def run_glue_transform(start_date: date, end_date: date) -> None:
+def run_glue_transform(start_date: date, end_date: date) -> dict:
     """Invoke the real Glue job script as a subprocess -- the same CLI contract
     `statemachine/ads_ingestion.asl.json`'s GlueTransform state (`glue:startJobRun.sync`)
-    would supply as job arguments."""
+    would supply as job arguments. Its stdout is one structured JSON log line per
+    `common.logging_config` record; this parses the rejected-ratio and schema-drift
+    metrics back out of that stream so `main()` can alert on them, rather than
+    re-deriving validation results by re-reading silver/rejected itself."""
     env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
     result = subprocess.run(
         [
@@ -75,11 +84,26 @@ def run_glue_transform(start_date: date, end_date: date) -> None:
         capture_output=True,
         text=True,
     )
+    rejected_ratios: dict[str, float] = {}
+    drift_fields: dict[str, int] = {}
     for line in result.stdout.splitlines():
         print(f"  [glue] {line}")
+        try:
+            record = json.loads(line)
+        except ValueError:
+            continue
+        # _JsonFormatter merges `extra={"fields": {...}}` straight into the top-level
+        # payload (see common/logging_config.py) -- these keys are not nested.
+        if record.get("metric") == "RejectedRatio":
+            rejected_ratios[record["platform"]] = record["value"]
+        elif record.get("metric") == "NewFieldCount":
+            drift_fields[f"{record['platform']}.{record['field']}"] = record["count"]
+
     if result.returncode != 0:
         print(result.stderr, file=sys.stderr)
         raise RuntimeError("bronze_to_silver.py failed")
+
+    return {"rejected_ratios": rejected_ratios, "drift_fields": drift_fields}
 
 
 def _list_silver_records(start_date: date, end_date: date) -> list[dict]:
@@ -109,6 +133,31 @@ def init_warehouse() -> sqlite3.Connection:
     conn.executescript(SCHEMA_PATH.read_text())
     conn.commit()
     return conn
+
+
+def snapshot_warehouse(conn: sqlite3.Connection, as_of: str) -> Path:
+    """Point-in-time copy of the SQLite stand-in warehouse, taken before a load pass
+    mutates it -- the local equivalent of a Redshift snapshot
+    (`aws redshift create-cluster-snapshot`), which a real deployment would rely on for
+    this instead of a file-level copy. Uses sqlite3's own backup API rather than a raw
+    file copy so a concurrently-open connection can never yield a torn snapshot."""
+    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    # Keep microsecond precision in the filename -- the two load passes in one `main()`
+    # run can land within the same wall-clock second, and truncating to seconds would
+    # make the second pass's snapshot silently overwrite the first's.
+    snapshot_name = f"pipeline_{as_of.replace('+00:00', 'Z').replace(':', '-').replace('.', '-')}.db"
+    snapshot_path = SNAPSHOT_DIR / snapshot_name
+    snapshot_conn = sqlite3.connect(snapshot_path)
+    with snapshot_conn:
+        conn.backup(snapshot_conn)
+    snapshot_conn.close()
+
+    existing_snapshots = sorted(SNAPSHOT_DIR.glob("pipeline_*.db"))
+    for stale_snapshot in existing_snapshots[:-SNAPSHOTS_TO_KEEP]:
+        stale_snapshot.unlink()
+
+    logger.info("wrote warehouse snapshot", extra={"fields": {"path": str(snapshot_path)}})
+    return snapshot_path
 
 
 def copy_into_staging(conn: sqlite3.Connection, records: list[dict]) -> None:
@@ -321,7 +370,9 @@ def _rejected_summary() -> dict:
     return {"counts_by_platform": counts_by_platform, "reasons": reasons, "samples": samples}
 
 
-def export_dashboard_data(conn: sqlite3.Connection, reconciliation_results: list[dict]) -> None:
+def export_dashboard_data(
+    conn: sqlite3.Connection, reconciliation_results: list[dict], data_quality: dict
+) -> None:
     DASHBOARD_DATA_DIR.mkdir(parents=True, exist_ok=True)
     conn.row_factory = sqlite3.Row
 
@@ -350,7 +401,12 @@ def export_dashboard_data(conn: sqlite3.Connection, reconciliation_results: list
     (DASHBOARD_DATA_DIR / "campaign_performance.json").write_text(json.dumps(performance, indent=2))
     (DASHBOARD_DATA_DIR / "rejected_summary.json").write_text(json.dumps(_rejected_summary(), indent=2))
     (DASHBOARD_DATA_DIR / "pipeline_run_summary.json").write_text(json.dumps(
-        {"generated_at": datetime.now(UTC).isoformat(), "reconciliation_passes": reconciliation_results}, indent=2
+        {
+            "generated_at": datetime.now(UTC).isoformat(),
+            "reconciliation_passes": reconciliation_results,
+            "data_quality": data_quality,
+        },
+        indent=2,
     ))
     logger.info("exported dashboard data", extra={"fields": {"rows": len(performance)}})
 
@@ -360,6 +416,9 @@ def main() -> None:
     parser.add_argument("--days", type=int, default=14)
     parser.add_argument("--reset", action="store_true")
     args = parser.parse_args()
+
+    log_path = enable_file_logging(LOG_DIR / f"pipeline_run_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.jsonl")
+    print(f"Logging to stdout and {log_path}")
 
     if args.reset:
         reset_local_state()
@@ -373,21 +432,36 @@ def main() -> None:
     generate_seed_data(start_date, end_date, rename_cutover)
 
     print("Running Glue bronze -> silver/rejected validation")
-    run_glue_transform(start_date, end_date)
+    data_quality = run_glue_transform(start_date, end_date)
+    for platform, ratio in data_quality["rejected_ratios"].items():
+        if ratio > REJECTED_RATIO_ALERT_THRESHOLD:
+            send_teams_alert(
+                "Data quality threshold breached",
+                f"{platform} rejected {ratio:.1%} of records in {start_date} .. {end_date}, "
+                f"above the {REJECTED_RATIO_ALERT_THRESHOLD:.0%} alert threshold.",
+                facts={"platform": platform, "rejected_ratio": f"{ratio:.1%}"},
+            )
 
     print("Initializing local warehouse (SQLite stand-in for Redshift)")
     conn = init_warehouse()
 
     reconciliation_results = []
     for pass_start, pass_end in [(start_date, mid_date), (rename_cutover, end_date)]:
+        snapshot_warehouse(conn, datetime.now(UTC).isoformat())
         print(f"Running redshift_load pass for {pass_start} .. {pass_end}")
+        result = run_redshift_load_pass(conn, pass_start, pass_end)
+        if result["status"] == "MISMATCH":
+            send_teams_alert(
+                "Reconciliation mismatch",
+                f"Staging vs. fact row/cost mismatch for {pass_start} .. {pass_end}.",
+                facts=result,
+            )
         reconciliation_results.append(
-            {"start_date": pass_start.isoformat(), "end_date": pass_end.isoformat(),
-             **run_redshift_load_pass(conn, pass_start, pass_end)}
+            {"start_date": pass_start.isoformat(), "end_date": pass_end.isoformat(), **result}
         )
 
     print("Exporting dashboard data")
-    export_dashboard_data(conn, reconciliation_results)
+    export_dashboard_data(conn, reconciliation_results, data_quality)
     conn.close()
     print("Done.")
 

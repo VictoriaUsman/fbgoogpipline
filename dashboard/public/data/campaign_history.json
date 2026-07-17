@@ -4,7 +4,7 @@
     "platform": "meta_ads",
     "campaign_name": "Prospecting - Lookalike 1%",
     "channel_type": null,
-    "valid_from": "2026-07-17T04:43:43.215122+00:00",
+    "valid_from": "2026-07-17T05:22:54.432401+00:00",
     "valid_to": null,
     "is_current": 1
   },
@@ -13,7 +13,7 @@
     "platform": "meta_ads",
     "campaign_name": "Retargeting - Cart Abandoners",
     "channel_type": null,
-    "valid_from": "2026-07-17T04:43:43.215122+00:00",
+    "valid_from": "2026-07-17T05:22:54.432401+00:00",
     "valid_to": null,
     "is_current": 1
   },
@@ -22,7 +22,7 @@
     "platform": "meta_ads",
     "campaign_name": "Catalog Sales - Dynamic Ads",
     "channel_type": null,
-    "valid_from": "2026-07-17T04:43:43.215122+00:00",
+    "valid_from": "2026-07-17T05:22:54.432401+00:00",
     "valid_to": null,
     "is_current": 1
   },
@@ -31,8 +31,8 @@
     "platform": "meta_ads",
     "campaign_name": "Lead Gen - Decision Makers",
     "channel_type": null,
-    "valid_from": "2026-07-17T04:43:43.215122+00:00",
-    "valid_to": "2026-07-17T04:43:43.223999+00:00",
+    "valid_from": "2026-07-17T05:22:54.432401+00:00",
+    "valid_to": "2026-07-17T05:22:54.440353+00:00",
     "is_current": 0
   },
   {
@@ -40,7 +40,7 @@
     "platform": "meta_ads",
     "campaign_name": "Lead Gen - Enterprise Decision Makers",
     "channel_type": null,
-    "valid_from": "2026-07-17T04:43:43.223999+00:00",
+    "valid_from": "2026-07-17T05:22:54.440353+00:00",
     "valid_to": null,
     "is_current": 1
   },
@@ -49,7 +49,7 @@
     "platform": "meta_ads",
     "campaign_name": "Retargeting - Website Visitors",
     "channel_type": null,
-    "valid_from": "2026-07-17T04:43:43.215122+00:00",
+    "valid_from": "2026-07-17T05:22:54.432401+00:00",
     "valid_to": null,
     "is_current": 1
   },
@@ -58,7 +58,7 @@
     "platform": "meta_ads",
     "campaign_name": "Awareness - Video Views",
     "channel_type": null,
-    "valid_from": "2026-07-17T04:43:43.215122+00:00",
+    "valid_from": "2026-07-17T05:22:54.432401+00:00",
     "valid_to": null,
     "is_current": 1
   },
@@ -67,8 +67,8 @@
     "platform": "google_ads",
     "campaign_name": "Search - Brand",
     "channel_type": "SEARCH",
-    "valid_from": "2026-07-17T04:43:43.215122+00:00",
-    "valid_to": "2026-07-17T04:43:43.223999+00:00",
+    "valid_from": "2026-07-17T05:22:54.432401+00:00",
+    "valid_to": "2026-07-17T05:22:54.440353+00:00",
     "is_current": 0
   },
   {
@@ -76,7 +76,7 @@
     "platform": "google_ads",
     "campaign_name": "Search - Brand (US)",
     "channel_type": "SEARCH",
-    "valid_from": "2026-07-17T04:43:43.223999+00:00",
+    "valid_from": "2026-07-17T05:22:54.440353+00:00",
     "valid_to": null,
     "is_current": 1
   },
@@ -85,7 +85,7 @@
     "platform": "google_ads",
     "campaign_name": "Shopping - Bestsellers",
     "channel_type": "SHOPPING",
-    "valid_from": "2026-07-17T04:43:43.215122+00:00",
+    "valid_from": "2026-07-17T05:22:54.432401+00:00",
     "valid_to": null,
     "is_current": 1
   },
@@ -94,7 +94,7 @@
     "platform": "google_ads",
     "campaign_name": "Performance Max - Retail",
     "channel_type": "PERFORMANCE_MAX",
-    "valid_from": "2026-07-17T04:43:43.215122+00:00",
+    "valid_from": "2026-07-17T05:22:54.432401+00:00",
     "valid_to": null,
     "is_current": 1
   },
@@ -103,7 +103,7 @@
     "platform": "google_ads",
     "campaign_name": "Search - Competitor Terms",
     "channel_type": "SEARCH",
-    "valid_from": "2026-07-17T04:43:43.215122+00:00",
+    "valid_from": "2026-07-17T05:22:54.432401+00:00",
     "valid_to": null,
     "is_current": 1
   },
@@ -112,7 +112,7 @@
     "platform": "google_ads",
     "campaign_name": "Search - Branded",
     "channel_type": "SEARCH",
-    "valid_from": "2026-07-17T04:43:43.215122+00:00",
+    "valid_from": "2026-07-17T05:22:54.432401+00:00",
     "valid_to": null,
     "is_current": 1
   },
@@ -121,7 +121,7 @@
     "platform": "google_ads",
     "campaign_name": "Display - Retargeting",
     "channel_type": "DISPLAY",
-    "valid_from": "2026-07-17T04:43:43.215122+00:00",
+    "valid_from": "2026-07-17T05:22:54.432401+00:00",
     "valid_to": null,
     "is_current": 1
   }

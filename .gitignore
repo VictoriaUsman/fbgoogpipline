@@ -5,6 +5,7 @@ __pycache__/
 .ruff_cache/
 data_lake/
 warehouse/
+logs/
 config/accounts.yaml
 node_modules/
 dashboard/dist/
