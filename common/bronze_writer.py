@@ -49,8 +49,22 @@ def write_bronze_ndjson(rows: Iterable[dict], *, platform: str, account_id: str)
         parts[report_date] += 1
         buffer.clear()
 
+    last_known_date = date.today()
     for row in rows:
-        report_date = date.fromisoformat(row["date"])
+        try:
+            report_date = date.fromisoformat(row["date"])
+            last_known_date = report_date
+        except (TypeError, ValueError):
+            # A row with a genuinely malformed date (e.g. seed_data's "bad_date"
+            # corruption mode) still belongs in bronze -- validate_record() is the
+            # intended rejection point, not this writer. File it under the nearest
+            # known-good partition so it still falls inside the requested window.
+            logger.warning(
+                "row has an unparseable date -- writing to bronze under the nearest "
+                "known-good partition; Glue validation will reject it downstream",
+                extra={"fields": {"platform": platform, "account_id": account_id, "raw_date": row.get("date")}},
+            )
+            report_date = last_known_date
         buffers[report_date].append(row)
         if len(buffers[report_date]) >= FLUSH_ROW_THRESHOLD:
             flush(report_date)
