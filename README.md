@@ -160,11 +160,20 @@ demo-scale stand-in for something a real AWS deployment gets for free:
 
 - **Teams alerts** (`common/notifications.py`) — fire on a reconciliation `MISMATCH`
   or when a platform's rejected ratio for a run exceeds
-  `REJECTED_RATIO_ALERT_THRESHOLD` (10%, see `local_runner/run_pipeline.py`). Follows
-  the same `DEMO_MODE` pattern as `common/secrets.py`: with `DEMO_MODE=1` (the
-  default) or no `TEAMS_WEBHOOK_URL` set, the alert is logged instead of posted. Set
-  `DEMO_MODE=0` and `TEAMS_WEBHOOK_URL=<a Teams incoming webhook URL>` to see a real
-  Teams message.
+  `REJECTED_RATIO_ALERT_THRESHOLD` (10%, see `local_runner/run_pipeline.py`). Gated on
+  `TEAMS_WEBHOOK_URL` alone — deliberately *not* on `DEMO_MODE` (see
+  `common/secrets.py`), since that flag also stubs out credential resolution and this
+  project has no real ad-account credentials to fall back to. With no
+  `TEAMS_WEBHOOK_URL` set, the alert is logged instead of posted; a failed POST (bad
+  URL, network blip) is also just logged, never raised — a missed notification should
+  never fail the pipeline run.
+
+  To wire up a real channel: create an Incoming Webhook in a Teams channel (**⋯ →
+  Connectors → Incoming Webhook**), then drop it in a repo-root `.env` (gitignored,
+  loaded automatically by `main()` via `python-dotenv`):
+  ```
+  TEAMS_WEBHOOK_URL=https://your-tenant.webhook.office.com/webhookb2/...
+  ```
 - **S3 versioning, stood in** (`common/versioning.py`) — every bronze/silver/rejected
   write goes through `write_versioned()`, which archives the object it's about to
   overwrite into a sibling `.versions/` folder first. A real deployment would just

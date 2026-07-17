@@ -11,6 +11,9 @@
 
   --series-google: #2a78d6;
   --series-meta: #008300;
+  --series-channel-3: #e87ba4;
+  --series-channel-4: #eda100;
+  --series-channel-5: #1baf7a;
 
   --status-good: #0ca30c;
   --status-warning: #fab219;
@@ -31,6 +34,9 @@
 
   --series-google: #3987e5;
   --series-meta: #008300;
+  --series-channel-3: #d55181;
+  --series-channel-4: #c98500;
+  --series-channel-5: #199e70;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -47,6 +53,9 @@
 
     --series-google: #3987e5;
     --series-meta: #008300;
+    --series-channel-3: #d55181;
+    --series-channel-4: #c98500;
+    --series-channel-5: #199e70;
   }
 }
 
@@ -118,7 +127,7 @@ body {
 
 .stat-tiles {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 14px;
   margin-bottom: 16px;
 }
@@ -428,6 +437,48 @@ table.data-table tbody tr:hover {
   width: 9px;
   height: 9px;
   border-radius: 50%;
+}
+
+.donut-card-body {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.donut-svg-wrap {
+  position: relative;
+  flex: none;
+  width: 160px;
+  height: 160px;
+}
+
+.donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  pointer-events: none;
+}
+
+.donut-center .value {
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.donut-center .label {
+  font-size: 11px;
+  color: var(--ink-muted);
+  margin-top: 2px;
+}
+
+.donut-legend {
+  flex: 1;
+  min-width: 220px;
 }
 
 .footer-note {

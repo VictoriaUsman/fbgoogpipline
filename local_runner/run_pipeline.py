@@ -35,7 +35,6 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from common.logging_config import enable_file_logging, get_logger
-from common.notifications import send_teams_alert
 from seed_data.generate_seed_data import generate as generate_seed_data
 
 logger = get_logger(__name__)
@@ -412,6 +411,16 @@ def export_dashboard_data(
 
 
 def main() -> None:
+    # Loaded here, not at module import time, so importing this module (as the test
+    # suite does) never depends on -- or mutates the process environment with -- a
+    # repo-root .env file. common.notifications reads TEAMS_WEBHOOK_URL at ITS import
+    # time, so the .env has to be in place before that import runs, which is why it's
+    # deferred to here too rather than sitting at the top of this file.
+    from dotenv import load_dotenv
+
+    load_dotenv(REPO_ROOT / ".env")
+    from common.notifications import send_teams_alert
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--days", type=int, default=14)
     parser.add_argument("--reset", action="store_true")

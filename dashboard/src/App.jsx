@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useDashboardData } from "./lib/useDashboardData.js";
 import {
   computeCampaignRollup,
+  computeChannelMix,
   computeDailySeriesByPlatform,
   computePlatformTotals,
   uniqueSortedDates,
@@ -10,6 +11,7 @@ import { formatCurrency, formatCurrencyAxis, formatDateTime, formatNumber, PLATF
 import { StatTiles } from "./components/StatTiles.jsx";
 import { TrendChart } from "./components/TrendChart.jsx";
 import { PlatformBreakdown } from "./components/PlatformBreakdown.jsx";
+import { ChannelMixDonut } from "./components/ChannelMixDonut.jsx";
 import { CampaignTable } from "./components/CampaignTable.jsx";
 import { HistoryPanel } from "./components/HistoryPanel.jsx";
 import { RejectedPanel } from "./components/RejectedPanel.jsx";
@@ -99,6 +101,8 @@ function Dashboard({ data, platform, onChangePlatform }) {
 
   const campaignRollup = useMemo(() => computeCampaignRollup(filteredRows), [filteredRows]);
 
+  const channelMix = useMemo(() => computeChannelMix(filteredRows), [filteredRows]);
+
   const filteredHistory = useMemo(
     () => (platform === "all" ? data.campaignHistory : data.campaignHistory.filter((r) => r.platform === platform)),
     [data.campaignHistory, platform]
@@ -150,6 +154,12 @@ function Dashboard({ data, platform, onChangePlatform }) {
           <p className="card-subtitle">Staging vs. fact, per simulated load pass</p>
           <ReconciliationPanel passes={data.runSummary.reconciliation_passes} />
         </div>
+      </div>
+
+      <div className="card">
+        <h2>Spend mix by channel</h2>
+        <p className="card-subtitle">Google Ads channel type, plus Meta Ads as one combined slice — current filter</p>
+        <ChannelMixDonut mix={channelMix} />
       </div>
 
       <div className="card">

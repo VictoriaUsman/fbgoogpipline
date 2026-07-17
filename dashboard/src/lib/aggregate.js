@@ -93,6 +93,34 @@ export function computeCampaignRollup(rows) {
   }));
 }
 
+const CHANNEL_TYPE_LABELS = {
+  SEARCH: "Search",
+  SHOPPING: "Shopping",
+  DISPLAY: "Display",
+  PERFORMANCE_MAX: "Performance Max",
+};
+
+/** Buckets spend by Google Ads channel_type, folding all Meta Ads rows (which have no
+ * channel_type dimension) into one "Meta Ads" bucket. Sorted by spend descending for
+ * rendering order -- color assignment stays keyed off `key`, never off this order, so
+ * a given channel keeps the same color regardless of how the mix shifts. */
+export function computeChannelMix(rows) {
+  const costByKey = new Map();
+  for (const row of rows) {
+    const key = row.platform === "google_ads" ? (row.channel_type ?? "OTHER") : "meta_ads";
+    costByKey.set(key, (costByKey.get(key) ?? 0) + (row.cost ?? 0));
+  }
+  const total = [...costByKey.values()].reduce((a, b) => a + b, 0);
+  return [...costByKey.entries()]
+    .map(([key, cost]) => ({
+      key,
+      label: key === "meta_ads" ? "Meta Ads" : (CHANNEL_TYPE_LABELS[key] ?? key),
+      cost,
+      share: total > 0 ? cost / total : 0,
+    }))
+    .sort((a, b) => b.cost - a.cost);
+}
+
 const REASON_RULES = [
   [/^missing required field: (.+)$/, (m) => `Missing field: ${m[1]}`],
   [/^field cost is negative/, () => "Negative cost value"],

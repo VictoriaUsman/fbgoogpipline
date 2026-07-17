@@ -31,6 +31,14 @@ export function StatTiles({ rows }) {
         <DeltaLabel value={conversionsDelta} />
       </div>
       <div className="stat-tile">
+        <div className="label">Total clicks</div>
+        <div className="value">{formatNumber(totals.clicks)}</div>
+      </div>
+      <div className="stat-tile">
+        <div className="label">Total impressions</div>
+        <div className="value">{formatNumber(totals.impressions)}</div>
+      </div>
+      <div className="stat-tile">
         <div className="label">Blended ROAS</div>
         <div className="value">{totals.roas ? `${totals.roas.toFixed(2)}x` : "–"}</div>
       </div>

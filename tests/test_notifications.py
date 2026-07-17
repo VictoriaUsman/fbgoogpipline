@@ -2,12 +2,13 @@ import common.notifications as notifications
 
 
 def test_demo_mode_is_on_by_default():
-    # Mirrors common/secrets.py -- this project has no real Teams channel, so every
-    # test in this suite depends on DEMO_MODE never performing a real HTTP POST.
+    # DEMO_MODE still exists here for parity with common/secrets.py, but no longer
+    # gates send_teams_alert -- only TEAMS_WEBHOOK_URL does (see module docstring).
     assert notifications.DEMO_MODE is True
 
 
-def test_send_teams_alert_logs_instead_of_posting_in_demo_mode(monkeypatch):
+def test_send_teams_alert_logs_instead_of_posting_without_a_webhook(monkeypatch):
+    monkeypatch.setattr(notifications, "TEAMS_WEBHOOK_URL", "")
     warnings = []
     monkeypatch.setattr(notifications.logger, "warning", lambda msg, **kwargs: warnings.append((msg, kwargs)))
 
@@ -16,7 +17,7 @@ def test_send_teams_alert_logs_instead_of_posting_in_demo_mode(monkeypatch):
     assert sent is False
     assert len(warnings) == 1
     message, kwargs = warnings[0]
-    assert message == "teams alert not sent (DEMO_MODE or no TEAMS_WEBHOOK_URL configured)"
+    assert message == "teams alert not sent (no TEAMS_WEBHOOK_URL configured)"
     assert kwargs["extra"]["fields"]["title"] == "Test title"
     assert kwargs["extra"]["fields"]["platform"] == "google_ads"
 
@@ -60,3 +61,27 @@ def test_send_teams_alert_posts_when_demo_mode_off_and_webhook_configured(monkey
     assert posted["url"] == "https://example.invalid/webhook"
     assert posted["json"]["title"] == "Reconciliation mismatch"
     assert posted["json"]["sections"][0]["facts"] == [{"name": "status", "value": "MISMATCH"}]
+
+
+def test_send_teams_alert_returns_false_and_logs_on_a_broken_webhook(monkeypatch):
+    # A misconfigured or unreachable webhook (e.g. a placeholder URL) must never crash
+    # the pipeline run over a missed notification.
+    monkeypatch.setattr(notifications, "DEMO_MODE", False)
+    monkeypatch.setattr(notifications, "TEAMS_WEBHOOK_URL", "https://placeholder.invalid/webhook")
+
+    def broken_post(*a, **kw):
+        raise notifications.requests.ConnectionError("name resolution failed")
+
+    monkeypatch.setattr(notifications.requests, "post", broken_post)
+
+    errors = []
+    monkeypatch.setattr(notifications.logger, "error", lambda msg, **kwargs: errors.append((msg, kwargs)))
+
+    sent = notifications.send_teams_alert("Test title", "Test body")
+
+    assert sent is False
+    assert len(errors) == 1
+    message, kwargs = errors[0]
+    assert message == "teams alert failed to send"
+    assert kwargs["extra"]["fields"]["title"] == "Test title"
+    assert "name resolution failed" in kwargs["extra"]["fields"]["error"]
