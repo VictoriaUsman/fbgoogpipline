@@ -47,51 +47,82 @@ ruff check .
 
 ## Architecture
 
+```mermaid
+flowchart TD
+    Sched["EventBridge: daily schedule"] --> Prep["Lambda: PrepareMapInput<br/>one item per configured account"]
+    Prep --> MapIn
+
+    subgraph MAP["Step Functions Map -- one branch per account, MaxConcurrency 8"]
+        direction TB
+        MapIn((" "))
+        Req["Lambda: RequestReport"]
+        IsAsync{"Sync or async platform?"}
+        Wait["Wait 30s"]
+        Poll["Lambda: ReportPoller"]
+        PollStatus{"Report status?"}
+        Dl["Lambda: ReportDownloader"]
+
+        MapIn --> Req
+        Req --> IsAsync
+        IsAsync -->|"google_ads: sync GAQL query"| GDone(("branch done"))
+        IsAsync -->|"meta_ads: async report job"| Wait
+        Wait --> Poll --> PollStatus
+        PollStatus -->|"IN_PROGRESS"| Wait
+        PollStatus -->|"COMPLETED"| Dl
+        Dl --> MDone(("branch done"))
+    end
+
+    GDone --> Bronze[("S3 bronze zone")]
+    MDone --> Bronze
+
+    Bronze --> Glue["Glue: bronze_to_silver.py<br/>validate_record() hard gate"]
+    Glue -->|"valid"| Silver[("S3 silver zone")]
+    Glue -->|"invalid"| Rejected[("S3 rejected zone<br/>+ _validation_error")]
+
+    subgraph WH["Redshift-style SCD2 warehouse"]
+        direction LR
+        Copy["COPY into staging"] --> DimA[("dim_account")]
+        Copy --> DimC[("dim_campaign")]
+        Copy --> Fact[("fct_campaign_performance<br/>MERGE upsert")]
+        Copy --> Hist[("fct_campaign_performance_history<br/>snapshot log")]
+    end
+
+    Silver --> Copy
+
+    Fact --> Dash["React dashboard (static, no server)"]
+    Hist --> Dash
+    DimC --> Dash
+    Rejected --> Dash
+
+    classDef task fill:#ffffff,stroke:#4a5568,color:#1a1a1a
+    classDef decision fill:#fff4d6,stroke:#c9960c,color:#5c4400
+    classDef start fill:#ffffff,stroke:#8a94a6,color:#8a94a6
+    classDef google fill:#4285F4,stroke:#1a56c4,color:#ffffff
+    classDef meta fill:#0668E1,stroke:#044a9e,color:#ffffff
+    classDef store fill:#eef1f5,stroke:#8a94a6,color:#1a1a1a
+    classDef warn fill:#fdecea,stroke:#c0392b,color:#7a1f14
+
+    class Sched,Prep,Req,Glue,Dash task
+    class IsAsync decision
+    class MapIn start
+    class GDone google
+    class Wait,Poll,PollStatus,Dl,MDone meta
+    class Bronze,Silver,DimA,DimC,Fact,Hist,Copy store
+    class Rejected warn
 ```
-config/accounts.yaml (2 Google Ads + 2 Meta Ads accounts)
-        │
-        ▼
-EventBridge (daily) ──▶ Step Functions: ads_ingestion.asl.json
-        │
-        ▼
-  PrepareMapInput (Lambda)
-        │  builds one {platform, account} item per configured account
-        ▼
-  Map state, MaxConcurrency=8 ── one pipeline, platform as a fan-out dimension
-   ┌─────────────────────────────────────────────────────────┐
-   │ RequestReport (Lambda)                                  │
-   │   google_ads → GAQL search, rows in hand synchronously  │
-   │   meta_ads   → POST /insights?async=true, report_run_id │
-   │        │                                                │
-   │        ▼ IsAsyncPlatform (Choice)                       │
-   │   google_ads: skip straight to bronze/                  │
-   │   meta_ads:   WaitBeforePoll(30s) → PollReportStatus     │
-   │               → loop until COMPLETED/FAILED/30 polls    │
-   │        │                                                │
-   │        ▼                                                │
-   │   DownloadReport (Lambda, meta_ads only) → bronze/       │
-   └─────────────────────────────────────────────────────────┘
-        │
-        ▼
-  GlueTransform: glue_jobs/bronze_to_silver.py
-        │  validation/rules.py — hard gate on required fields / types / ISO dates
-        │  valid → silver/, invalid → rejected/ (with _validation_error), schema
-        │  drift on unrecognized fields is logged as a signal, never a rejection
-        ▼
-Step Functions: redshift_load.asl.json
-        │  COPY silver/ → staging, then SCD2 dimension close+insert and fact merge
-        ▼
-  dim_account, dim_campaign (SCD2)  +  fct_campaign_performance (current-state,
-  MERGE upsert)  +  fct_campaign_performance_history (full periodic-snapshot log)
-        │
-        ▼
-local_runner/run_pipeline.py exports dashboard/public/data/*.json
-        │
-        ▼
-React dashboard (static, no server) — spend/conversions trends, platform
-breakdown, campaign table, SCD2 history viewer, rejected-records panel,
-reconciliation status
-```
+
+**Legend:** amber diamond = branch decision · blue = Google Ads' synchronous path ·
+darker blue = Meta Ads' async create/poll/download path · gray = S3 zone or warehouse
+table · red = rejected records.
+
+A polished, standalone render of this same diagram (useful for a presentation or
+interview) is available as a self-contained page — see `docs/architecture.html`, or
+open it directly in a browser.
+
+The single Map state is what makes this "one pipeline, platform as a fan-out
+dimension" rather than one state machine per ad platform — `IsAsyncPlatform` (keyed
+on `RequestReport`'s `status` field) is the only place the two platforms' fetch
+shapes actually diverge in the orchestration.
 
 ### Why Google Ads and Meta Ads don't share one fetch interface
 
@@ -156,6 +187,7 @@ ingest → validate → warehouse path, to keep it demo-sized:
 | `dashboard/` | Static React (Vite) dashboard reading `dashboard/public/data/*.json` |
 | `tests/` | pytest suite — validation rules, scheduling, connectors, bronze writer, S3 paths, Glue job, lambda integration |
 | `.github/workflows/ci.yml` | ruff lint, ASL JSON validation, pytest |
+| `docs/architecture.html` | Standalone, offline-renderable version of the diagram above (bundles Mermaid locally) |
 
 ## Dashboard
 

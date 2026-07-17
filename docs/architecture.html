@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Google Ads &amp; Meta Ads Pipeline — Architecture</title>
+<style>
+  :root {
+    --bg: #f4f5f9;
+    --panel: #ffffff;
+    --ink: #161a22;
+    --ink-muted: #5b6472;
+    --line: #dde1ea;
+    --google: #4285f4;
+    --meta: #0668e1;
+    --amber: #c9960c;
+    --critical: #c0392b;
+    --paper: #fbfaf6;
+    --paper-line: #e7e3d6;
+    --accent: #2f6fed;
+    --chip-bg: #ffffff;
+    --shadow: 0 1px 2px rgba(20, 24, 33, 0.04), 0 8px 24px rgba(20, 24, 33, 0.06);
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #0b0e14;
+    --panel: #121722;
+    --ink: #e7ebf3;
+    --ink-muted: #8791a3;
+    --line: #232a38;
+    --amber: #e0ac2d;
+    --critical: #e5636a;
+    --paper: #fbfaf6;
+    --paper-line: #e7e3d6;
+    --accent: #6ea1ff;
+    --chip-bg: #171d29;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b0e14;
+      --panel: #121722;
+      --ink: #e7ebf3;
+      --ink-muted: #8791a3;
+      --line: #232a38;
+      --amber: #e0ac2d;
+      --critical: #e5636a;
+      --paper: #fbfaf6;
+      --paper-line: #e7e3d6;
+      --accent: #6ea1ff;
+      --chip-bg: #171d29;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", "IBM Plex Sans", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .mono {
+    font-family: ui-monospace, "JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+
+  .stage {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 56px 28px 72px;
+  }
+
+  header.top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 24px;
+    margin-bottom: 36px;
+    flex-wrap: wrap;
+  }
+
+  .eyebrow {
+    font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 10px;
+    font-weight: 600;
+  }
+
+  h1 {
+    font-size: clamp(26px, 3.4vw, 38px);
+    line-height: 1.15;
+    margin: 0 0 12px;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    max-width: 20ch;
+  }
+
+  .sub {
+    color: var(--ink-muted);
+    font-size: 15px;
+    line-height: 1.6;
+    max-width: 56ch;
+    margin: 0;
+  }
+
+  .toggle {
+    border: 1px solid var(--line);
+    background: var(--chip-bg);
+    color: var(--ink);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 22px 0 28px;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    background: var(--chip-bg);
+    border: 1px solid var(--line);
+    font-size: 12.5px;
+    color: var(--ink-muted);
+  }
+
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .dot.google { background: #4285f4; }
+  .dot.meta { background: #0668e1; }
+  .dot.store { background: #8a94a6; }
+  .dot.warn { background: #c0392b; }
+  .dot.decision { background: #c9960c; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .panel-head .label {
+    font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    color: var(--ink-muted);
+    letter-spacing: 0.04em;
+  }
+
+  .diagram-wrap {
+    background:
+      linear-gradient(var(--paper-line) 1px, transparent 1px) 0 0 / 28px 28px,
+      linear-gradient(90deg, var(--paper-line) 1px, transparent 1px) 0 0 / 28px 28px,
+      var(--paper);
+    padding: 28px 12px;
+    overflow-x: auto;
+  }
+
+  .diagram-wrap pre.mermaid {
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    min-width: 920px;
+  }
+
+  .notes {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-top: 22px;
+  }
+
+  .note {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+
+  .note .k {
+    font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 8px;
+  }
+
+  .note p {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--ink-muted);
+  }
+
+  .note code {
+    font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: var(--ink);
+  }
+
+  footer {
+    margin-top: 30px;
+    font-size: 12.5px;
+    color: var(--ink-muted);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  @media (max-width: 720px) {
+    .notes { grid-template-columns: 1fr; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <header class="top">
+    <div>
+      <p class="eyebrow">Data pipeline architecture</p>
+      <h1>Google Ads &amp; Meta Ads → SCD2 warehouse</h1>
+      <p class="sub">
+        One Step Functions pipeline, platform kept as a fan-out dimension rather than
+        duplicated per ad network. Traces every record from the daily schedule trigger
+        through validation to the warehouse and the dashboard that reads it.
+      </p>
+    </div>
+    <button class="toggle" id="themeToggle" type="button">Dark mode</button>
+  </header>
+
+  <div class="legend">
+    <span class="chip"><span class="dot google"></span>Google Ads · synchronous fetch</span>
+    <span class="chip"><span class="dot meta"></span>Meta Ads · async report job</span>
+    <span class="chip"><span class="dot decision"></span>branch decision</span>
+    <span class="chip"><span class="dot store"></span>S3 zone / warehouse table</span>
+    <span class="chip"><span class="dot warn"></span>rejected records</span>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <span class="label mono">ads_ingestion.asl.json → redshift_load.asl.json</span>
+      <span class="label mono">local demo · nothing deployed to AWS</span>
+    </div>
+    <div class="diagram-wrap">
+      <pre class="mermaid">
+flowchart TD
+    Sched["EventBridge: daily schedule"] --> Prep["Lambda: PrepareMapInput&lt;br/&gt;one item per configured account"]
+    Prep --> MapIn
+
+    subgraph MAP["Step Functions Map -- one branch per account, MaxConcurrency 8"]
+        direction TB
+        MapIn((" "))
+        Req["Lambda: RequestReport"]
+        IsAsync{"Sync or async platform?"}
+        Wait["Wait 30s"]
+        Poll["Lambda: ReportPoller"]
+        PollStatus{"Report status?"}
+        Dl["Lambda: ReportDownloader"]
+
+        MapIn --> Req
+        Req --> IsAsync
+        IsAsync -->|"google_ads: sync GAQL query"| GDone(("branch done"))
+        IsAsync -->|"meta_ads: async report job"| Wait
+        Wait --> Poll --> PollStatus
+        PollStatus -->|"IN_PROGRESS"| Wait
+        PollStatus -->|"COMPLETED"| Dl
+        Dl --> MDone(("branch done"))
+    end
+
+    GDone --> Bronze[("S3 bronze zone")]
+    MDone --> Bronze
+
+    Bronze --> Glue["Glue: bronze_to_silver.py&lt;br/&gt;validate_record() hard gate"]
+    Glue -->|"valid"| Silver[("S3 silver zone")]
+    Glue -->|"invalid"| Rejected[("S3 rejected zone&lt;br/&gt;+ _validation_error")]
+
+    subgraph WH["Redshift-style SCD2 warehouse"]
+        direction LR
+        Copy["COPY into staging"] --> DimA[("dim_account")]
+        Copy --> DimC[("dim_campaign")]
+        Copy --> Fact[("fct_campaign_performance&lt;br/&gt;MERGE upsert")]
+        Copy --> Hist[("fct_campaign_performance_history&lt;br/&gt;snapshot log")]
+    end
+
+    Silver --> Copy
+
+    Fact --> Dash["React dashboard&lt;br/&gt;(static, no server)"]
+    Hist --> Dash
+    DimC --> Dash
+    Rejected --> Dash
+
+    classDef task fill:#ffffff,stroke:#4a5568,color:#1a1a1a
+    classDef decision fill:#fff4d6,stroke:#c9960c,color:#5c4400
+    classDef start fill:#ffffff,stroke:#8a94a6,color:#8a94a6
+    classDef google fill:#4285F4,stroke:#1a56c4,color:#ffffff
+    classDef meta fill:#0668E1,stroke:#044a9e,color:#ffffff
+    classDef store fill:#eef1f5,stroke:#8a94a6,color:#1a1a1a
+    classDef warn fill:#fdecea,stroke:#c0392b,color:#7a1f14
+
+    class Sched,Prep,Req,Glue,Dash task
+    class IsAsync decision
+    class MapIn start
+    class GDone google
+    class Wait,Poll,PollStatus,Dl,MDone meta
+    class Bronze,Silver,DimA,DimC,Fact,Hist,Copy store
+    class Rejected warn
+      </pre>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note">
+      <p class="k">One pipeline, not two</p>
+      <p>
+        A single Map state fans out over <code>{platform, account}</code>. The
+        <code>IsAsync</code> choice is the only point where Google Ads' synchronous
+        GAQL query and Meta Ads' async create/poll/download job actually diverge.
+      </p>
+    </div>
+    <div class="note">
+      <p class="k">SCD2 history is earned, not faked</p>
+      <p>
+        The demo window loads in two separate simulated passes split at a campaign
+        rename, so <code>dim_campaign</code>'s version chain reflects two real loads,
+        not a hand-written fixture.
+      </p>
+    </div>
+    <div class="note">
+      <p class="k">Nothing calls a real ad API</p>
+      <p>
+        <code>DEMO_MODE=1</code> stubs credential resolution. No AWS resources are
+        provisioned — the warehouse step runs against SQLite as a local stand-in for
+        Redshift Serverless.
+      </p>
+    </div>
+  </div>
+
+  <footer>
+    <span class="mono">github.com — GoogleMeta Pipeline</span>
+    <span>Rendered directly from the diagram checked into README.md</span>
+  </footer>
+</div>
+
+<script>
+  (function () {
+    var btn = document.getElementById("themeToggle");
+    var root = document.documentElement;
+    function apply(theme) {
+      root.setAttribute("data-theme", theme);
+      btn.textContent = theme === "dark" ? "Light mode" : "Dark mode";
+    }
+    var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    apply(prefersDark ? "dark" : "light");
+    btn.addEventListener("click", function () {
+      var current = root.getAttribute("data-theme");
+      apply(current === "dark" ? "light" : "dark");
+    });
+  })();
+</script>
+
+<script src="./mermaid.min.js"></script>
+<script>
+  mermaid.initialize({ startOnLoad: true, securityLevel: "loose", theme: "base" });
+</script>
+</body>
+</html>
